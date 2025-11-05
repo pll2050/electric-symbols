@@ -45,32 +45,45 @@ export class SelectionBoxTool {
   }
 
   private onPointerDown = (evt: dia.Event) => {
+    if (evt.clientX === undefined || evt.clientY === undefined) return
     this.isDrawing = true
-    const localPoint = this.paper.clientToLocalPoint(evt.clientX, evt.clientY)
-    this.startPoint = { x: localPoint.x, y: localPoint.y }
+    const { x, y } = this.paper.clientToLocalPoint(evt.clientX, evt.clientY)
+    if (x === undefined || y === undefined) {
+      this.isDrawing = false
+      return
+    }
+
+    this.startPoint = { x, y }
 
     // 선택 박스 SVG 요소 생성
-    this.createSelectionBox(localPoint.x, localPoint.y)
+    this.createSelectionBox(x, y)
   }
 
   private onPointerMove = (evt: dia.Event) => {
     if (!this.isDrawing || !this.startPoint || !this.selectionBox) return
+    if (evt.clientX === undefined || evt.clientY === undefined) return
 
-    const localPoint = this.paper.clientToLocalPoint(evt.clientX, evt.clientY)
-    this.updateSelectionBox(this.startPoint, localPoint)
+    const { x, y } = this.paper.clientToLocalPoint(evt.clientX, evt.clientY)
+    if (x === undefined || y === undefined) return
+
+    this.updateSelectionBox(this.startPoint, { x, y })
   }
 
   private onPointerUp = (evt: dia.Event) => {
     if (!this.isDrawing || !this.startPoint) return
 
-    const localPoint = this.paper.clientToLocalPoint(evt.clientX, evt.clientY)
+    if (evt.clientX !== undefined && evt.clientY !== undefined) {
+      const { x, y } = this.paper.clientToLocalPoint(evt.clientX, evt.clientY)
 
-    // 선택 영역 내의 요소들 찾기
-    const selectedElements = this.getElementsInArea(this.startPoint, localPoint)
+      if (x !== undefined && y !== undefined) {
+        // 선택 영역 내의 요소들 찾기
+        const selectedElements = this.getElementsInArea(this.startPoint, { x, y })
 
-    // 콜백 호출
-    if (this.onSelectionComplete) {
-      this.onSelectionComplete(selectedElements)
+        // 콜백 호출
+        if (this.onSelectionComplete) {
+          this.onSelectionComplete(selectedElements)
+        }
+      }
     }
 
     // 정리
@@ -82,8 +95,10 @@ export class SelectionBoxTool {
   private onDocumentMouseMove = (evt: MouseEvent) => {
     if (!this.isDrawing || !this.startPoint || !this.selectionBox) return
 
-    const localPoint = this.paper.clientToLocalPoint(evt.clientX, evt.clientY)
-    this.updateSelectionBox(this.startPoint, localPoint)
+    const { x, y } = this.paper.clientToLocalPoint(evt.clientX, evt.clientY)
+    if (x === undefined || y === undefined) return
+
+    this.updateSelectionBox(this.startPoint, { x, y })
   }
 
   private onDocumentMouseUp = (evt: MouseEvent) => {

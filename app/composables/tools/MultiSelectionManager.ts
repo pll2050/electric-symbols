@@ -214,11 +214,11 @@ export class MultiSelectionManager {
         tagName: 'text',
         selector: 'label'
       }]
-    })
+    }) as dia.Element
 
     // 그룹 메타데이터 저장
-    groupElement.set('isGroup', true)
-    groupElement.set('groupedElements', elements.map(el => el.id))
+    groupElement.prop('isGroup', true)
+    groupElement.prop('groupedElements', elements.map(el => el.id))
 
     // 요소들을 그룹의 자식으로 설정 (임베딩)
     elements.forEach(element => {
@@ -241,7 +241,7 @@ export class MultiSelectionManager {
     let ungrouped = false
 
     elements.forEach(element => {
-      if (element.get('isGroup')) {
+      if (element.prop('isGroup')) {
         // 임베딩된 요소들을 해제
         const embeddedCells = element.getEmbeddedCells()
         embeddedCells.forEach((cell: any) => {
@@ -266,7 +266,7 @@ export class MultiSelectionManager {
 
   // 선택된 요소 중 그룹이 있는지 확인
   hasGroupSelected(): boolean {
-    return this.getSelectedElements().some(el => el.get('isGroup'))
+    return this.getSelectedElements().some(el => el.prop('isGroup'))
   }
 
   // 선택 가능한 요소 개수

@@ -189,22 +189,20 @@ export class LineDrawingTool {
             args: { x: x2 - Math.min(x1, x2), y: y2 - Math.min(y1, y2) }
           }
         ]
-      }
-    })
+      },
+      markup: [
+        { tagName: 'rect', selector: 'body' },
+        { tagName: 'line', selector: 'line' },
+        { tagName: 'circle', selector: 'startPort' },
+        { tagName: 'circle', selector: 'endPort' }
+      ]
+    }) as dia.Element
 
-    line.set('type', 'custom.Line')
-    line.set('lineData', {
+    line.prop('type', 'custom.Line')
+    line.prop('lineData', {
       startPoint: { x: x1, y: y1 },
       endPoint: { x: x2, y: y2 }
     })
-
-    // markup 설정
-    line.markup = [
-      { tagName: 'rect', selector: 'body' },
-      { tagName: 'line', selector: 'line' },
-      { tagName: 'circle', selector: 'startPort' },
-      { tagName: 'circle', selector: 'endPort' }
-    ]
 
     return line
   }
@@ -230,7 +228,7 @@ export class LineDrawingTool {
       'startPort/cy': y1 - minY,
       'endPort/cx': x2 - minX,
       'endPort/cy': y2 - minY
-    })
+    } as any)
 
     // 포트 위치 업데이트
     line.portProp('start', 'args', { x: x1 - minX, y: y1 - minY })
