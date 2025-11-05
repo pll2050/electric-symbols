@@ -100,6 +100,15 @@ const setMode = (mode: DrawingMode) => {
   if (toolManager) {
     toolManager.setMode(mode)
   }
+
+  // 선택 모드일 때만 SelectionBoxTool 활성화
+  if (selectionBoxTool) {
+    if (mode === DrawingMode.SELECT) {
+      selectionBoxTool.activate()
+    } else {
+      selectionBoxTool.deactivate()
+    }
+  }
 }
 
 const updateSelectionState = () => {
@@ -178,10 +187,8 @@ onMounted(() => {
   // 3. PaperScroller 생성 및 렌더링
   scroller = new ui.PaperScroller({
     paper,
-    autoResizePaper: true,
+    autoResizePaper: false, // 자동 크기 조정 비활성화 (도형 그릴 때 캔버스 축소 방지)
     cursor: 'grab',
-    baseWidth: 1,
-    baseHeight: 1,
     padding: 50
   })
 
@@ -204,7 +211,7 @@ onMounted(() => {
     }
   })
 
-  // 선택 모드일 때만 영역 선택 도구 활성화
+  // 선택 모드일 때만 영역 선택 도구 활성화 (초기 모드는 SELECT)
   selectionBoxTool.activate()
 
   // 요소 클릭 시 선택 상태 업데이트

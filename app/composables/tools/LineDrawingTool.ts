@@ -6,10 +6,20 @@ export class LineDrawingTool {
   private startPoint: { x: number; y: number } | null = null
   private currentLine: dia.Element | null = null
   private isShiftPressed: boolean = false
+  private boundHandlers: {
+    onPointerDown: any
+    onPointerMove: any
+    onPointerUp: any
+  }
 
   constructor(paper: dia.Paper, graph: dia.Graph) {
     this.paper = paper
     this.graph = graph
+    this.boundHandlers = {
+      onPointerDown: this.onPointerDown.bind(this),
+      onPointerMove: this.onPointerMove.bind(this),
+      onPointerUp: this.onPointerUp.bind(this)
+    }
     this.setupKeyboardEvents()
   }
 
@@ -28,15 +38,15 @@ export class LineDrawingTool {
   }
 
   activate() {
-    this.paper.on('blank:pointerdown', this.onPointerDown.bind(this))
-    this.paper.on('blank:pointermove', this.onPointerMove.bind(this))
-    this.paper.on('blank:pointerup', this.onPointerUp.bind(this))
+    this.paper.on('blank:pointerdown', this.boundHandlers.onPointerDown)
+    this.paper.on('blank:pointermove', this.boundHandlers.onPointerMove)
+    this.paper.on('blank:pointerup', this.boundHandlers.onPointerUp)
   }
 
   deactivate() {
-    this.paper.off('blank:pointerdown')
-    this.paper.off('blank:pointermove')
-    this.paper.off('blank:pointerup')
+    this.paper.off('blank:pointerdown', this.boundHandlers.onPointerDown)
+    this.paper.off('blank:pointermove', this.boundHandlers.onPointerMove)
+    this.paper.off('blank:pointerup', this.boundHandlers.onPointerUp)
     this.startPoint = null
     this.currentLine = null
   }

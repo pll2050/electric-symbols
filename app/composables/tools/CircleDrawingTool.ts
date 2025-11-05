@@ -5,22 +5,32 @@ export class CircleDrawingTool {
   private graph: dia.Graph
   private centerPoint: { x: number; y: number } | null = null
   private currentCircle: shapes.standard.Circle | null = null
+  private boundHandlers: {
+    onPointerDown: any
+    onPointerMove: any
+    onPointerUp: any
+  }
 
   constructor(paper: dia.Paper, graph: dia.Graph) {
     this.paper = paper
     this.graph = graph
+    this.boundHandlers = {
+      onPointerDown: this.onPointerDown.bind(this),
+      onPointerMove: this.onPointerMove.bind(this),
+      onPointerUp: this.onPointerUp.bind(this)
+    }
   }
 
   activate() {
-    this.paper.on('blank:pointerdown', this.onPointerDown.bind(this))
-    this.paper.on('blank:pointermove', this.onPointerMove.bind(this))
-    this.paper.on('blank:pointerup', this.onPointerUp.bind(this))
+    this.paper.on('blank:pointerdown', this.boundHandlers.onPointerDown)
+    this.paper.on('blank:pointermove', this.boundHandlers.onPointerMove)
+    this.paper.on('blank:pointerup', this.boundHandlers.onPointerUp)
   }
 
   deactivate() {
-    this.paper.off('blank:pointerdown')
-    this.paper.off('blank:pointermove')
-    this.paper.off('blank:pointerup')
+    this.paper.off('blank:pointerdown', this.boundHandlers.onPointerDown)
+    this.paper.off('blank:pointermove', this.boundHandlers.onPointerMove)
+    this.paper.off('blank:pointerup', this.boundHandlers.onPointerUp)
     this.centerPoint = null
     this.currentCircle = null
   }
