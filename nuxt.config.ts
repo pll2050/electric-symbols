@@ -5,5 +5,20 @@ export default defineNuxtConfig({
 
   modules: ['@nuxtjs/tailwindcss'],
 
-  css: ['~/assets/css/main.css']
+  css: ['~/assets/css/main.css'],
+
+  build: {
+    transpile: ['@joint/core', '@joint/plus']
+  },
+
+  vite: {
+    optimizeDeps: {
+      include: ['@joint/core', '@joint/plus']
+    },
+    build: {
+      commonjsOptions: {
+        transformMixedEsModules: true
+      }
+    }
+  }
 })

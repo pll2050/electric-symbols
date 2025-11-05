@@ -11,6 +11,47 @@ export class MultiSelectionManager {
     this.graph = graph
     this.setupKeyboardEvents()
     this.setupClickEvents()
+    this.setupDragEvents()
+  }
+
+  private setupDragEvents() {
+    this.paper.on('element:pointerdown', (elementView: dia.ElementView) => {
+      const activeElement = elementView.model
+
+      if (this.selectedElements.size <= 1 || !this.selectedElements.has(activeElement)) {
+        return
+      }
+
+      const restOfSelection = Array.from(this.selectedElements).filter(
+        (el) => el.id !== activeElement.id
+      )
+
+      const onDrag = (element: dia.Element, newPosition: any, options: any) => {
+        // Prevent feedback loops from translations on follower elements.
+        if (options['selection-drag']) {
+          return
+        }
+
+        const tx = options.tx || 0
+        const ty = options.ty || 0
+
+        if (tx || ty) {
+          restOfSelection.forEach((follower) => {
+            follower.translate(tx, ty, { 'selection-drag': true })
+          })
+        }
+      }
+
+      const onDragEnd = () => {
+        activeElement.off('change:position', onDrag)
+        this.paper.off('element:pointerup', onDragEnd)
+        this.paper.off('blank:pointerup', onDragEnd)
+      }
+
+      activeElement.on('change:position', onDrag)
+      this.paper.once('element:pointerup', onDragEnd)
+      this.paper.once('blank:pointerup', onDragEnd)
+    })
   }
 
   private setupKeyboardEvents() {
