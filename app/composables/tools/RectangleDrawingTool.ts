@@ -1,0 +1,72 @@
+import { dia, shapes } from '@joint/plus'
+
+export class RectangleDrawingTool {
+  private paper: dia.Paper
+  private graph: dia.Graph
+  private startPoint: { x: number; y: number } | null = null
+  private currentRect: shapes.standard.Rectangle | null = null
+
+  constructor(paper: dia.Paper, graph: dia.Graph) {
+    this.paper = paper
+    this.graph = graph
+  }
+
+  activate() {
+    this.paper.on('blank:pointerdown', this.onPointerDown.bind(this))
+    this.paper.on('blank:pointermove', this.onPointerMove.bind(this))
+    this.paper.on('blank:pointerup', this.onPointerUp.bind(this))
+  }
+
+  deactivate() {
+    this.paper.off('blank:pointerdown')
+    this.paper.off('blank:pointermove')
+    this.paper.off('blank:pointerup')
+    this.startPoint = null
+    this.currentRect = null
+  }
+
+  private onPointerDown(evt: dia.Event, x: number, y: number) {
+    this.startPoint = { x, y }
+
+    // 임시 사각형 생성
+    this.currentRect = new shapes.standard.Rectangle({
+      position: { x, y },
+      size: { width: 1, height: 1 },
+      attrs: {
+        body: {
+          fill: '#ffffff',
+          stroke: '#000000',
+          strokeWidth: 2
+        }
+      }
+    })
+
+    this.graph.addCell(this.currentRect)
+  }
+
+  private onPointerMove(evt: dia.Event, x: number, y: number) {
+    if (!this.startPoint || !this.currentRect) return
+
+    // 드래그 방향에 따라 위치와 크기 계산
+    const width = Math.abs(x - this.startPoint.x)
+    const height = Math.abs(y - this.startPoint.y)
+    const posX = Math.min(x, this.startPoint.x)
+    const posY = Math.min(y, this.startPoint.y)
+
+    this.currentRect.position(posX, posY)
+    this.currentRect.resize(width, height)
+  }
+
+  private onPointerUp(evt: dia.Event, x: number, y: number) {
+    if (!this.startPoint || !this.currentRect) return
+
+    // 너무 작으면 삭제
+    const size = this.currentRect.size()
+    if (size.width < 5 || size.height < 5) {
+      this.currentRect.remove()
+    }
+
+    this.startPoint = null
+    this.currentRect = null
+  }
+}
