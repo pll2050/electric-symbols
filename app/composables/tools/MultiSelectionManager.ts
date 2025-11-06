@@ -1,14 +1,18 @@
 import { dia, elementTools } from '@joint/plus'
+import { TransformTool } from './TransformTool'
 
 export class MultiSelectionManager {
   private paper: dia.Paper
   private graph: dia.Graph
   private selectedElements: Set<dia.Element> = new Set()
   private isCtrlPressed: boolean = false
+  private transformTool: TransformTool
+  private showTransformHandles: boolean = true
 
   constructor(paper: dia.Paper, graph: dia.Graph) {
     this.paper = paper
     this.graph = graph
+    this.transformTool = new TransformTool(paper, graph)
     this.setupKeyboardEvents()
     this.setupClickEvents()
     this.setupDragEvents()
@@ -111,31 +115,53 @@ export class MultiSelectionManager {
 
   selectElement(element: dia.Element) {
     this.selectedElements.add(element)
-    this.highlightElement(element)
+    this.refreshHighlights()
   }
 
   deselectElement(element: dia.Element) {
     this.selectedElements.delete(element)
+    this.transformTool.clear() // FreeTransform 정리
     this.unhighlightElement(element)
+    this.refreshHighlights()
+  }
+
+  /**
+   * 모든 선택된 요소의 하이라이트를 새로고침
+   * (단일 선택 시 변환 핸들, 다중 선택 시 경계선만)
+   */
+  private refreshHighlights() {
+    // FreeTransform 먼저 정리
+    this.transformTool.clear()
+
+    this.selectedElements.forEach(element => {
+      this.unhighlightElement(element)
+      this.highlightElement(element)
+    })
   }
 
   private highlightElement(element: dia.Element) {
     const elementView = element.findView(this.paper)
     if (elementView) {
-      elementView.addTools(
-        new dia.ToolsView({
-          tools: [
-            new elementTools.Boundary({
-              padding: 5,
-              attrs: {
-                stroke: '#4a90e2',
-                strokeWidth: 2,
-                fill: 'rgba(74, 144, 226, 0.1)'
-              }
-            })
-          ]
-        })
-      )
+      if (this.showTransformHandles && this.selectedElements.size === 1) {
+        // 단일 선택 시 변환 핸들 표시 (회전 + 크기 조절)
+        this.transformTool.addTransformHandles(element)
+      } else {
+        // 다중 선택 시 간단한 경계선만 표시
+        elementView.addTools(
+          new dia.ToolsView({
+            tools: [
+              new elementTools.Boundary({
+                padding: 5,
+                attrs: {
+                  stroke: '#4a90e2',
+                  strokeWidth: 2,
+                  fill: 'rgba(74, 144, 226, 0.1)'
+                }
+              })
+            ]
+          })
+        )
+      }
     }
   }
 
@@ -145,6 +171,9 @@ export class MultiSelectionManager {
   }
 
   clearSelection() {
+    // FreeTransform 먼저 정리
+    this.transformTool.clear()
+
     this.selectedElements.forEach(element => {
       this.unhighlightElement(element)
     })
@@ -313,5 +342,87 @@ export class MultiSelectionManager {
   // 선택 가능한 요소 개수
   getSelectedCount(): number {
     return this.selectedElements.size
+  }
+
+  // ===== 회전 및 크기 조절 기능 =====
+
+  /**
+   * 선택된 요소들을 회전 (상대 각도)
+   */
+  rotateSelected(angleDelta: number) {
+    const elements = this.getSelectedElements()
+    if (elements.length === 0) {
+      console.log('회전할 요소가 선택되지 않았습니다.')
+      return
+    }
+
+    elements.forEach(element => {
+      this.transformTool.rotateElement(element, angleDelta)
+    })
+
+    console.log(`${elements.length}개 요소를 ${angleDelta}도 회전했습니다.`)
+  }
+
+  /**
+   * 선택된 요소들을 특정 각도로 회전 (절대 각도)
+   */
+  setRotation(angle: number) {
+    const elements = this.getSelectedElements()
+    if (elements.length === 0) {
+      console.log('회전할 요소가 선택되지 않았습니다.')
+      return
+    }
+
+    elements.forEach(element => {
+      this.transformTool.setElementRotation(element, angle)
+    })
+
+    console.log(`${elements.length}개 요소를 ${angle}도로 설정했습니다.`)
+  }
+
+  /**
+   * 선택된 요소들의 크기를 조절 (배율)
+   */
+  scaleSelected(scale: number) {
+    const elements = this.getSelectedElements()
+    if (elements.length === 0) {
+      console.log('크기를 조절할 요소가 선택되지 않았습니다.')
+      return
+    }
+
+    elements.forEach(element => {
+      this.transformTool.resizeElement(element, scale)
+    })
+
+    console.log(`${elements.length}개 요소의 크기를 ${scale}배로 조절했습니다.`)
+  }
+
+  /**
+   * 선택된 요소의 크기를 특정 크기로 설정 (단일 요소만)
+   */
+  setSize(width: number, height: number) {
+    const elements = this.getSelectedElements()
+    if (elements.length !== 1 || !elements[0]) {
+      console.log('크기를 설정하려면 정확히 1개의 요소를 선택해야 합니다.')
+      return
+    }
+
+    this.transformTool.setElementSize(elements[0], width, height)
+    console.log(`요소 크기를 ${width}x${height}로 설정했습니다.`)
+  }
+
+  /**
+   * 변환 핸들 표시 여부 토글
+   */
+  toggleTransformHandles(show: boolean) {
+    this.showTransformHandles = show
+    this.refreshHighlights()
+  }
+
+  /**
+   * 현재 변환 핸들 표시 상태
+   */
+  isTransformHandlesVisible(): boolean {
+    return this.showTransformHandles
   }
 }

@@ -11,6 +11,11 @@ export default defineNuxtConfig({
     transpile: ['@joint/core', '@joint/plus']
   },
 
+  experimental: {
+    // Windows 경로 문제 해결을 위한 실험적 옵션
+    appManifest: false
+  },
+
   vite: {
     optimizeDeps: {
       include: ['@joint/core', '@joint/plus']
@@ -19,6 +24,15 @@ export default defineNuxtConfig({
       commonjsOptions: {
         transformMixedEsModules: true
       }
+    }
+  },
+
+  hooks: {
+    'components:extend'(components: any) {
+      // 가상 모듈 필터링 (null 문자로 시작하는 모듈 제외)
+      return components.filter((component: any) => {
+        return !component.filePath?.includes('\0')
+      })
     }
   }
 })

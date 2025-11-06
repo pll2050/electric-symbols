@@ -36,6 +36,48 @@
       </div>
 
       <div class="tool-group">
+        <button
+          @click="rotateLeft"
+          class="tool-btn"
+          :disabled="selectedCount === 0"
+          :class="{ 'opacity-50 cursor-not-allowed': selectedCount === 0 }"
+          title="왼쪽으로 15도 회전"
+        >
+          ↺
+        </button>
+        <button
+          @click="rotateRight"
+          class="tool-btn"
+          :disabled="selectedCount === 0"
+          :class="{ 'opacity-50 cursor-not-allowed': selectedCount === 0 }"
+          title="오른쪽으로 15도 회전"
+        >
+          ↻
+        </button>
+      </div>
+
+      <div class="tool-group">
+        <button
+          @click="scaleUp"
+          class="tool-btn"
+          :disabled="selectedCount === 0"
+          :class="{ 'opacity-50 cursor-not-allowed': selectedCount === 0 }"
+          title="크기 확대 (120%)"
+        >
+          🔍+
+        </button>
+        <button
+          @click="scaleDown"
+          class="tool-btn"
+          :disabled="selectedCount === 0"
+          :class="{ 'opacity-50 cursor-not-allowed': selectedCount === 0 }"
+          title="크기 축소 (80%)"
+        >
+          🔍-
+        </button>
+      </div>
+
+      <div class="tool-group">
         <button @click="deleteSelected" class="tool-btn" title="삭제 (Delete)">
           🗑️
         </button>
@@ -59,7 +101,7 @@
     <!-- 하단 정보 -->
     <div class="footer">
       <span class="text-xs text-gray-600">
-        드래그: 영역 선택 | Shift: 수평/수직선 | Ctrl+A: 전체 선택 | Ctrl+C/V: 복사/붙여넣기 | Delete: 삭제 | Ctrl+클릭: 다중 선택
+        드래그: 영역 선택 | Shift: 수평/수직선 | Ctrl+A: 전체 선택 | Ctrl+C/V: 복사/붙여넣기 | Delete: 삭제 | R: 회전 | [/]: 크기 | Ctrl+클릭: 다중 선택
       </span>
       <span class="text-xs text-gray-600 ml-4" v-if="selectedCount > 0">
         선택됨: {{ selectedCount }}개
@@ -71,6 +113,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { dia, shapes, ui } from '@joint/plus'
+import '@joint/plus/joint-plus.css'
 import { ToolManager, DrawingMode } from '~/composables/tools/ToolManager'
 import { MultiSelectionManager } from '~/composables/tools/MultiSelectionManager'
 import { SelectionBoxTool } from '~/composables/tools/SelectionBoxTool'
@@ -135,6 +178,34 @@ const groupSelected = () => {
 const ungroupSelected = () => {
   if (multiSelect) {
     multiSelect.ungroupSelected()
+    updateSelectionState()
+  }
+}
+
+const rotateLeft = () => {
+  if (multiSelect) {
+    multiSelect.rotateSelected(-15) // 반시계방향 15도
+    updateSelectionState()
+  }
+}
+
+const rotateRight = () => {
+  if (multiSelect) {
+    multiSelect.rotateSelected(15) // 시계방향 15도
+    updateSelectionState()
+  }
+}
+
+const scaleUp = () => {
+  if (multiSelect) {
+    multiSelect.scaleSelected(1.2) // 120% 확대
+    updateSelectionState()
+  }
+}
+
+const scaleDown = () => {
+  if (multiSelect) {
+    multiSelect.scaleSelected(0.8) // 80% 축소
     updateSelectionState()
   }
 }
@@ -228,8 +299,9 @@ onMounted(() => {
     setTimeout(updateSelectionState, 0)
   })
 
-  // 복사/붙여넣기 이벤트
+  // 복사/붙여넣기 및 회전/크기 조절 이벤트
   document.addEventListener('keydown', (evt) => {
+    // 복사 (Ctrl+C)
     if ((evt.ctrlKey || evt.metaKey) && evt.key === 'c') {
       evt.preventDefault()
       const clipboard = multiSelect?.copySelected()
@@ -241,6 +313,7 @@ onMounted(() => {
       }
     }
 
+    // 붙여넣기 (Ctrl+V)
     if ((evt.ctrlKey || evt.metaKey) && evt.key === 'v') {
       evt.preventDefault()
       const clipboardData = sessionStorage.getItem('clipboard')
@@ -255,6 +328,34 @@ onMounted(() => {
         })
         multiSelect.pasteElements(clonedElements)
         console.log('붙여넣기 완료')
+      }
+    }
+
+    // 회전 (R키 또는 Shift+R)
+    if (evt.key === 'r' || evt.key === 'R') {
+      evt.preventDefault()
+      if (multiSelect && selectedCount.value > 0) {
+        const angle = evt.shiftKey ? -15 : 15 // Shift+R: 반시계, R: 시계
+        multiSelect.rotateSelected(angle)
+        updateSelectionState()
+      }
+    }
+
+    // 크기 확대 (] 키)
+    if (evt.key === ']') {
+      evt.preventDefault()
+      if (multiSelect && selectedCount.value > 0) {
+        multiSelect.scaleSelected(1.2)
+        updateSelectionState()
+      }
+    }
+
+    // 크기 축소 ([ 키)
+    if (evt.key === '[') {
+      evt.preventDefault()
+      if (multiSelect && selectedCount.value > 0) {
+        multiSelect.scaleSelected(0.8)
+        updateSelectionState()
       }
     }
   })
