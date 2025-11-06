@@ -1,10 +1,10 @@
-import { dia } from '@joint/plus'
+import { dia, shapes } from '@joint/plus'
 
 export class LineDrawingTool {
   private paper: dia.Paper
   private graph: dia.Graph
   private startPoint: { x: number; y: number } | null = null
-  private currentLine: dia.Element | null = null
+  private currentLine: shapes.standard.Path | null = null
   private isShiftPressed: boolean = false
   private boundHandlers: {
     onPointerDown: any
@@ -117,91 +117,37 @@ export class LineDrawingTool {
   }
 
   /**
-   * 연결점이 있는 선 요소 생성
+   * JointJS 공식 standard.Path를 사용한 선 요소 생성
+   * https://docs.jointjs.com/api/shapes/standard/Path
    */
-  private createLineElement(x1: number, y1: number, x2: number, y2: number): dia.Element {
-    const line = new dia.Element({
-      position: { x: Math.min(x1, x2), y: Math.min(y1, y2) },
-      size: {
-        width: Math.abs(x2 - x1) || 1,
-        height: Math.abs(y2 - y1) || 1
-      },
-      attrs: {
-        body: {
-          refWidth: '100%',
-          refHeight: '100%',
-          fill: 'transparent',
-          stroke: 'none'
-        },
-        line: {
-          x1: x1 - Math.min(x1, x2),
-          y1: y1 - Math.min(y1, y2),
-          x2: x2 - Math.min(x1, x2),
-          y2: y2 - Math.min(y1, y2),
-          stroke: '#000000',
-          strokeWidth: 2
-        },
-        // 시작점 연결점
-        startPort: {
-          cx: x1 - Math.min(x1, x2),
-          cy: y1 - Math.min(y1, y2),
-          r: 4,
-          fill: '#4ade80',
-          stroke: '#000000',
-          strokeWidth: 2,
-          cursor: 'pointer'
-        },
-        // 끝점 연결점
-        endPort: {
-          cx: x2 - Math.min(x1, x2),
-          cy: y2 - Math.min(y1, y2),
-          r: 4,
-          fill: '#4ade80',
-          stroke: '#000000',
-          strokeWidth: 2,
-          cursor: 'pointer'
-        }
-      },
-      ports: {
-        groups: {
-          'connection': {
-            position: 'absolute',
-            attrs: {
-              circle: {
-                r: 4,
-                fill: '#4ade80',
-                stroke: '#000000',
-                strokeWidth: 2,
-                magnet: true
-              }
-            }
-          }
-        },
-        items: [
-          {
-            id: 'start',
-            group: 'connection',
-            args: { x: x1 - Math.min(x1, x2), y: y1 - Math.min(y1, y2) }
-          },
-          {
-            id: 'end',
-            group: 'connection',
-            args: { x: x2 - Math.min(x1, x2), y: y2 - Math.min(y1, y2) }
-          }
-        ]
-      },
-      markup: [
-        { tagName: 'rect', selector: 'body' },
-        { tagName: 'line', selector: 'line' },
-        { tagName: 'circle', selector: 'startPort' },
-        { tagName: 'circle', selector: 'endPort' }
-      ]
-    }) as dia.Element
+  private createLineElement(x1: number, y1: number, x2: number, y2: number): shapes.standard.Path {
+    const minX = Math.min(x1, x2)
+    const minY = Math.min(y1, y2)
+    const width = Math.abs(x2 - x1) || 1
+    const height = Math.abs(y2 - y1) || 1
 
-    line.prop('type', 'custom.Line')
-    line.prop('lineData', {
-      startPoint: { x: x1, y: y1 },
-      endPoint: { x: x2, y: y2 }
+    // 로컬 좌표로 변환
+    const localX1 = x1 - minX
+    const localY1 = y1 - minY
+    const localX2 = x2 - minX
+    const localY2 = y2 - minY
+
+    // JointJS 공식 Path 도형 사용
+    const line = new shapes.standard.Path()
+    line.position(minX, minY)
+    line.resize(width, height)
+
+    // refD를 사용하여 상대 경로 설정 (요소 크기에 맞춰 자동 스케일)
+    line.attr({
+      body: {
+        refD: `M ${localX1} ${localY1} L ${localX2} ${localY2}`,
+        stroke: '#000000',
+        strokeWidth: 2,
+        fill: 'none'
+      },
+      label: {
+        text: ''  // 레이블 없음
+      }
     })
 
     return line
@@ -210,28 +156,23 @@ export class LineDrawingTool {
   /**
    * 선 요소 업데이트
    */
-  private updateLineElement(line: dia.Element, x1: number, y1: number, x2: number, y2: number) {
+  private updateLineElement(line: shapes.standard.Path, x1: number, y1: number, x2: number, y2: number) {
     const minX = Math.min(x1, x2)
     const minY = Math.min(y1, y2)
     const width = Math.abs(x2 - x1) || 1
     const height = Math.abs(y2 - y1) || 1
 
+    // 로컬 좌표로 변환
+    const localX1 = x1 - minX
+    const localY1 = y1 - minY
+    const localX2 = x2 - minX
+    const localY2 = y2 - minY
+
     line.position(minX, minY)
     line.resize(width, height)
 
     line.attr({
-      'line/x1': x1 - minX,
-      'line/y1': y1 - minY,
-      'line/x2': x2 - minX,
-      'line/y2': y2 - minY,
-      'startPort/cx': x1 - minX,
-      'startPort/cy': y1 - minY,
-      'endPort/cx': x2 - minX,
-      'endPort/cy': y2 - minY
-    } as any)
-
-    // 포트 위치 업데이트
-    line.portProp('start', 'args', { x: x1 - minX, y: y1 - minY })
-    line.portProp('end', 'args', { x: x2 - minX, y: y2 - minY })
+      'body/refD': `M ${localX1} ${localY1} L ${localX2} ${localY2}`
+    })
   }
 }

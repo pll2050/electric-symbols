@@ -111,12 +111,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { dia, shapes, ui } from '@joint/plus'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { dia, shapes, ui, mvc } from '@joint/plus'
 import '@joint/plus/joint-plus.css'
 import { ToolManager, DrawingMode } from '~/composables/tools/ToolManager'
-import { MultiSelectionManager } from '~/composables/tools/MultiSelectionManager'
-import { SelectionBoxTool } from '~/composables/tools/SelectionBoxTool'
 
 const canvasRef = ref<HTMLElement | null>(null)
 const currentMode = ref<DrawingMode>(DrawingMode.SELECT)
@@ -127,15 +125,17 @@ let graph: dia.Graph | null = null
 let paper: dia.Paper | null = null
 let scroller: ui.PaperScroller | null = null
 let toolManager: ToolManager | null = null
-let multiSelect: MultiSelectionManager | null = null
-let selectionBoxTool: SelectionBoxTool | null = null
+let selection: ui.Selection | null = null
+let selectionCollection: mvc.Collection<dia.Cell> | null = null
 
 const tools = [
   { mode: DrawingMode.SELECT, icon: '🖱️', label: '선택' },
   { mode: DrawingMode.LINE, icon: '📏', label: '선' },
   { mode: DrawingMode.RECTANGLE, icon: '⬜', label: '사각형' },
   { mode: DrawingMode.CIRCLE, icon: '⭕', label: '원' },
-  { mode: DrawingMode.TRIANGLE, icon: '🔺', label: '삼각형' }
+  { mode: DrawingMode.TRIANGLE, icon: '🔺', label: '삼각형' },
+  { mode: DrawingMode.PORTED_RECTANGLE, icon: '🔌', label: '포트 사각형' },
+  { mode: DrawingMode.PORTED_CIRCLE, icon: '⚡', label: '포트 원형' }
 ]
 
 const setMode = (mode: DrawingMode) => {
@@ -144,70 +144,191 @@ const setMode = (mode: DrawingMode) => {
     toolManager.setMode(mode)
   }
 
-  // 선택 모드일 때만 SelectionBoxTool 활성화
-  if (selectionBoxTool) {
-    if (mode === DrawingMode.SELECT) {
-      selectionBoxTool.activate()
-    } else {
-      selectionBoxTool.deactivate()
-    }
+  // 선택 모드가 아닐 때는 선택 해제
+  if (mode !== DrawingMode.SELECT && selectionCollection) {
+    selectionCollection.reset([])
   }
 }
 
 const updateSelectionState = () => {
-  if (multiSelect) {
-    selectedCount.value = multiSelect.getSelectedCount()
-    hasGroup.value = multiSelect.hasGroupSelected()
+  if (selectionCollection) {
+    selectedCount.value = selectionCollection.length
+    const cells = selectionCollection.toArray()
+    hasGroup.value = cells.some((cell: dia.Cell) =>
+      cell.isElement() && (cell as dia.Element).prop('isGroup')
+    )
   }
 }
 
 const deleteSelected = () => {
-  if (multiSelect) {
-    multiSelect.deleteSelected()
+  if (selectionCollection) {
+    const cells = selectionCollection.toArray()
+    cells.forEach(cell => cell.remove())
+    selectionCollection.reset([])
     updateSelectionState()
   }
 }
 
 const groupSelected = () => {
-  if (multiSelect) {
-    multiSelect.groupSelected()
-    updateSelectionState()
+  if (!selectionCollection || selectionCollection.length < 2) {
+    console.log('그룹화하려면 최소 2개 이상의 요소를 선택해야 합니다.')
+    return
   }
+
+  const elements = selectionCollection.toArray().filter(cell => cell.isElement()) as dia.Element[]
+
+  // 모든 요소의 경계를 계산
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+
+  elements.forEach(element => {
+    const bbox = element.getBBox()
+    minX = Math.min(minX, bbox.x)
+    minY = Math.min(minY, bbox.y)
+    maxX = Math.max(maxX, bbox.x + bbox.width)
+    maxY = Math.max(maxY, bbox.y + bbox.height)
+  })
+
+  // 그룹을 나타내는 사각형 생성
+  const groupElement = new dia.Element({
+    position: { x: minX - 10, y: minY - 10 },
+    size: { width: maxX - minX + 20, height: maxY - minY + 20 },
+    attrs: {
+      body: {
+        fill: 'transparent',
+        stroke: '#9e9e9e',
+        strokeWidth: 1,
+        strokeDasharray: '5,5',
+        rx: 5,
+        ry: 5
+      },
+      label: {
+        text: `그룹 (${elements.length}개)`,
+        fill: '#666',
+        fontSize: 12,
+        refY: -10
+      }
+    },
+    markup: [{
+      tagName: 'rect',
+      selector: 'body'
+    }, {
+      tagName: 'text',
+      selector: 'label'
+    }]
+  }) as dia.Element
+
+  // 그룹 메타데이터 저장
+  groupElement.prop('isGroup', true)
+  groupElement.prop('groupedElements', elements.map(el => el.id))
+
+  // 요소들을 그룹의 자식으로 설정
+  elements.forEach(element => {
+    groupElement.embed(element)
+  })
+
+  graph?.addCell(groupElement)
+
+  // 그룹 요소만 선택
+  selectionCollection.reset([groupElement])
+  updateSelectionState()
+
+  console.log(`${elements.length}개 요소를 그룹화했습니다.`)
 }
 
 const ungroupSelected = () => {
-  if (multiSelect) {
-    multiSelect.ungroupSelected()
-    updateSelectionState()
+  if (!selectionCollection) return
+
+  const elements = selectionCollection.toArray().filter(cell => cell.isElement()) as dia.Element[]
+  let ungrouped = false
+
+  elements.forEach(element => {
+    if (element.prop('isGroup')) {
+      // 임베딩된 요소들을 해제
+      const embeddedCells = element.getEmbeddedCells()
+      embeddedCells.forEach((cell: dia.Cell) => {
+        if (cell.isElement()) {
+          element.unembed(cell as dia.Element)
+        }
+      })
+
+      // 그룹 요소 삭제
+      element.remove()
+      ungrouped = true
+      console.log('그룹을 해제했습니다.')
+    }
+  })
+
+  if (!ungrouped) {
+    console.log('선택된 그룹이 없습니다.')
   }
+
+  updateSelectionState()
+}
+
+const rotateElement = (element: dia.Element, angleDelta: number) => {
+  element.rotate(angleDelta, false)
+}
+
+const resizeElement = (element: dia.Element, scale: number) => {
+  const currentSize = element.size()
+  const newWidth = currentSize.width * scale
+  const newHeight = currentSize.height * scale
+
+  // 중심점을 유지하기 위해 현재 중심 위치 저장
+  const bbox = element.getBBox()
+  const centerX = bbox.x + bbox.width / 2
+  const centerY = bbox.y + bbox.height / 2
+
+  element.resize(newWidth, newHeight)
+
+  // 중심점이 원래 위치에 오도록 위치 조정
+  const newBBox = element.getBBox()
+  const newCenterX = newBBox.x + newBBox.width / 2
+  const newCenterY = newBBox.y + newBBox.height / 2
+
+  const deltaX = centerX - newCenterX
+  const deltaY = centerY - newCenterY
+
+  element.translate(deltaX, deltaY)
 }
 
 const rotateLeft = () => {
-  if (multiSelect) {
-    multiSelect.rotateSelected(-15) // 반시계방향 15도
-    updateSelectionState()
-  }
+  if (!selectionCollection) return
+
+  const elements = selectionCollection.toArray().filter(cell => cell.isElement()) as dia.Element[]
+  elements.forEach(element => rotateElement(element, -15))
+
+  console.log(`${elements.length}개 요소를 -15도 회전했습니다.`)
 }
 
 const rotateRight = () => {
-  if (multiSelect) {
-    multiSelect.rotateSelected(15) // 시계방향 15도
-    updateSelectionState()
-  }
+  if (!selectionCollection) return
+
+  const elements = selectionCollection.toArray().filter(cell => cell.isElement()) as dia.Element[]
+  elements.forEach(element => rotateElement(element, 15))
+
+  console.log(`${elements.length}개 요소를 15도 회전했습니다.`)
 }
 
 const scaleUp = () => {
-  if (multiSelect) {
-    multiSelect.scaleSelected(1.2) // 120% 확대
-    updateSelectionState()
-  }
+  if (!selectionCollection) return
+
+  const elements = selectionCollection.toArray().filter(cell => cell.isElement()) as dia.Element[]
+  elements.forEach(element => resizeElement(element, 1.2))
+
+  console.log(`${elements.length}개 요소를 1.2배 확대했습니다.`)
 }
 
 const scaleDown = () => {
-  if (multiSelect) {
-    multiSelect.scaleSelected(0.8) // 80% 축소
-    updateSelectionState()
-  }
+  if (!selectionCollection) return
+
+  const elements = selectionCollection.toArray().filter(cell => cell.isElement()) as dia.Element[]
+  elements.forEach(element => resizeElement(element, 0.8))
+
+  console.log(`${elements.length}개 요소를 0.8배 축소했습니다.`)
 }
 
 const clearCanvas = () => {
@@ -235,10 +356,10 @@ const exportToJSON = () => {
 onMounted(() => {
   if (!canvasRef.value) return
 
-  // 1. 그래프 생성 (cellNamespace를 shapes로 지정)
+  // 1. 그래프 생성
   graph = new dia.Graph({}, { cellNamespace: shapes })
 
-  // 2. 페이퍼 생성 (frozen: true, async: true로 시작)
+  // 2. 페이퍼 생성
   paper = new dia.Paper({
     model: graph,
     width: 1200,
@@ -252,13 +373,43 @@ onMounted(() => {
     cellViewNamespace: shapes,
     interactive: { elementMove: true },
     frozen: true,
-    async: true
+    async: true,
+
+    // 포트 연결 검증
+    validateConnection: function(cellViewS, magnetS, cellViewT, magnetT) {
+      // 자기 자신에게 연결 불가
+      if (cellViewS === cellViewT) return false
+
+      // 양쪽 모두 포트가 있어야 연결 가능
+      return !!(magnetS && magnetT)
+    },
+
+    // 포트 근처로 링크 자동 스냅
+    snapLinks: { radius: 30 },
+
+    // 연결 가능한 포트 강조 표시
+    markAvailable: true,
+
+    // 링크 기본 스타일
+    defaultLink: new dia.Link({
+      attrs: {
+        line: {
+          stroke: '#4A90E2',
+          strokeWidth: 2,
+          targetMarker: {
+            type: 'path',
+            d: 'M 10 -5 0 0 10 5 z',
+            fill: '#4A90E2'
+          }
+        }
+      }
+    })
   })
 
-  // 3. PaperScroller 생성 및 렌더링
+  // 3. PaperScroller 생성
   scroller = new ui.PaperScroller({
     paper,
-    autoResizePaper: false, // 자동 크기 조정 비활성화 (도형 그릴 때 캔버스 축소 방지)
+    autoResizePaper: false,
     cursor: 'grab',
     padding: 50
   })
@@ -270,28 +421,57 @@ onMounted(() => {
   // 5. Paper 활성화
   paper.unfreeze()
 
-  // 도구 초기화
+  // 6. 도구 초기화
   toolManager = new ToolManager(paper, graph)
-  multiSelect = new MultiSelectionManager(paper, graph)
 
-  // 영역 선택 도구 초기화
-  selectionBoxTool = new SelectionBoxTool(paper, graph, (selectedElements) => {
-    if (multiSelect) {
-      multiSelect.selectElementsInArea(selectedElements)
+  // 7. JointJS+ Selection 초기화 (공식 방식)
+  selectionCollection = new mvc.Collection<dia.Cell>()
+
+  selection = new ui.Selection({
+    paper: paper,
+    collection: selectionCollection,
+    useModelGeometry: true
+  })
+
+  // 8. Selection 이벤트 설정 (공식 예제 방식)
+  // 빈 영역 드래그로 영역 선택 시작
+  paper.on('blank:pointerdown', (evt: dia.Event) => {
+    if (currentMode.value === DrawingMode.SELECT) {
+      selection?.startSelecting(evt)
+    }
+  })
+
+  // Ctrl/Meta 키로 요소 추가 선택
+  paper.on('element:pointerup', (cellView: dia.CellView, evt: dia.Event) => {
+    if (currentMode.value === DrawingMode.SELECT) {
+      if (evt.ctrlKey || evt.metaKey) {
+        selectionCollection?.add(cellView.model)
+      } else {
+        selectionCollection?.reset([cellView.model])
+      }
       updateSelectionState()
     }
   })
 
-  // 선택 모드일 때만 영역 선택 도구 활성화 (초기 모드는 SELECT)
-  selectionBoxTool.activate()
-
-  // 요소 클릭 시 선택 상태 업데이트
-  paper.on('element:pointerclick', () => {
-    setTimeout(updateSelectionState, 0)
+  // Selection box 클릭 시 Ctrl로 선택 해제
+  selection.on('selection-box:pointerdown', (elementView: dia.ElementView, evt: dia.Event) => {
+    if (evt.ctrlKey || evt.metaKey) {
+      selectionCollection?.remove(elementView.model)
+      updateSelectionState()
+    }
   })
 
+  // 빈 영역 클릭 시 선택 해제
   paper.on('blank:pointerclick', () => {
-    setTimeout(updateSelectionState, 0)
+    if (currentMode.value === DrawingMode.SELECT) {
+      selectionCollection?.reset([])
+      updateSelectionState()
+    }
+  })
+
+  // Selection collection 변경 시 상태 업데이트
+  selectionCollection.on('add remove reset', () => {
+    updateSelectionState()
   })
 
   // 그래프 변경 시 선택 상태 업데이트
@@ -299,15 +479,25 @@ onMounted(() => {
     setTimeout(updateSelectionState, 0)
   })
 
-  // 복사/붙여넣기 및 회전/크기 조절 이벤트
+  // 키보드 이벤트
   document.addEventListener('keydown', (evt) => {
+    // Ctrl+A: 전체 선택
+    if ((evt.ctrlKey || evt.metaKey) && evt.key === 'a') {
+      evt.preventDefault()
+      if (currentMode.value === DrawingMode.SELECT) {
+        const allElements = graph?.getElements() || []
+        selectionCollection?.reset(allElements)
+        console.log(`전체 선택: ${allElements.length}개 요소`)
+      }
+    }
+
     // 복사 (Ctrl+C)
     if ((evt.ctrlKey || evt.metaKey) && evt.key === 'c') {
       evt.preventDefault()
-      const clipboard = multiSelect?.copySelected()
-      if (clipboard) {
+      if (selectionCollection && selectionCollection.length > 0) {
+        const elements = selectionCollection.toArray().filter(cell => cell.isElement()) as dia.Element[]
         sessionStorage.setItem('clipboard', JSON.stringify(
-          clipboard.map(el => el.toJSON())
+          elements.map(el => el.toJSON())
         ))
         console.log('복사됨')
       }
@@ -317,51 +507,74 @@ onMounted(() => {
     if ((evt.ctrlKey || evt.metaKey) && evt.key === 'v') {
       evt.preventDefault()
       const clipboardData = sessionStorage.getItem('clipboard')
-      if (clipboardData && multiSelect) {
+      if (clipboardData && graph) {
         const elementsData = JSON.parse(clipboardData)
         const clonedElements = elementsData.map((data: any) => {
-          // 기본 shapes에서 요소 복원
           const ElementClass = (shapes.standard as any)[data.type.split('.')[1]] || shapes.standard.Rectangle
           const element = new ElementClass()
           element.set(data)
+          const pos = element.position()
+          element.position(pos.x + 20, pos.y + 20)
           return element
         })
-        multiSelect.pasteElements(clonedElements)
+        graph.addCells(clonedElements)
+        selectionCollection?.reset(clonedElements)
         console.log('붙여넣기 완료')
       }
+    }
+
+    // Delete: 선택된 요소 삭제
+    if (evt.key === 'Delete') {
+      deleteSelected()
+    }
+
+    // Escape: 선택 해제
+    if (evt.key === 'Escape') {
+      selectionCollection?.reset([])
     }
 
     // 회전 (R키 또는 Shift+R)
     if (evt.key === 'r' || evt.key === 'R') {
       evt.preventDefault()
-      if (multiSelect && selectedCount.value > 0) {
-        const angle = evt.shiftKey ? -15 : 15 // Shift+R: 반시계, R: 시계
-        multiSelect.rotateSelected(angle)
-        updateSelectionState()
+      if (selectedCount.value > 0) {
+        if (evt.shiftKey) {
+          rotateLeft()
+        } else {
+          rotateRight()
+        }
       }
     }
 
     // 크기 확대 (] 키)
     if (evt.key === ']') {
       evt.preventDefault()
-      if (multiSelect && selectedCount.value > 0) {
-        multiSelect.scaleSelected(1.2)
-        updateSelectionState()
+      if (selectedCount.value > 0) {
+        scaleUp()
       }
     }
 
     // 크기 축소 ([ 키)
     if (evt.key === '[') {
       evt.preventDefault()
-      if (multiSelect && selectedCount.value > 0) {
-        multiSelect.scaleSelected(0.8)
-        updateSelectionState()
+      if (selectedCount.value > 0) {
+        scaleDown()
       }
     }
   })
 })
 
 onUnmounted(() => {
+  // Selection 정리
+  if (selection) {
+    selection.remove()
+    selection = null
+  }
+
+  if (selectionCollection) {
+    selectionCollection.reset([])
+    selectionCollection = null
+  }
+
   // PaperScroller 정리
   if (scroller) {
     scroller.remove()
@@ -380,14 +593,7 @@ onUnmounted(() => {
     graph = null
   }
 
-  // 도구들 정리
-  if (selectionBoxTool) {
-    selectionBoxTool.deactivate()
-    selectionBoxTool = null
-  }
-
   toolManager = null
-  multiSelect = null
 })
 </script>
 

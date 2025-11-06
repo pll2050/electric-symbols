@@ -3,13 +3,17 @@ import { LineDrawingTool } from './LineDrawingTool'
 import { RectangleDrawingTool } from './RectangleDrawingTool'
 import { CircleDrawingTool } from './CircleDrawingTool'
 import { TriangleDrawingTool } from './TriangleDrawingTool'
+import { PortedRectangleDrawingTool } from './PortedRectangleDrawingTool'
+import { PortedCircleDrawingTool } from './PortedCircleDrawingTool'
 
 export enum DrawingMode {
   SELECT = 'select',
   LINE = 'line',
   RECTANGLE = 'rectangle',
   CIRCLE = 'circle',
-  TRIANGLE = 'triangle'
+  TRIANGLE = 'triangle',
+  PORTED_RECTANGLE = 'ported_rectangle',
+  PORTED_CIRCLE = 'ported_circle'
 }
 
 export class ToolManager {
@@ -29,6 +33,8 @@ export class ToolManager {
     this.tools.set(DrawingMode.RECTANGLE, new RectangleDrawingTool(this.paper, this.graph))
     this.tools.set(DrawingMode.CIRCLE, new CircleDrawingTool(this.paper, this.graph))
     this.tools.set(DrawingMode.TRIANGLE, new TriangleDrawingTool(this.paper, this.graph))
+    this.tools.set(DrawingMode.PORTED_RECTANGLE, new PortedRectangleDrawingTool(this.paper, this.graph))
+    this.tools.set(DrawingMode.PORTED_CIRCLE, new PortedCircleDrawingTool(this.paper, this.graph))
   }
 
   setMode(mode: DrawingMode) {
@@ -55,7 +61,9 @@ export class ToolManager {
       [DrawingMode.LINE]: 'crosshair',
       [DrawingMode.RECTANGLE]: 'crosshair',
       [DrawingMode.CIRCLE]: 'crosshair',
-      [DrawingMode.TRIANGLE]: 'crosshair'
+      [DrawingMode.TRIANGLE]: 'crosshair',
+      [DrawingMode.PORTED_RECTANGLE]: 'crosshair',
+      [DrawingMode.PORTED_CIRCLE]: 'crosshair'
     }
 
     const paperEl = this.paper.el as HTMLElement
